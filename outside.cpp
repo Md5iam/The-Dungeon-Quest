@@ -3,11 +3,7 @@
 #include <iostream>
 #include <cmath>
 
-bool isOutsideNight = false;
-float cameraOrbitAngle = 0.0f;
-float sunAngle = 0.8f;
-bool cinematicMode = false;
-
+// --- Exit Scenario Lighting Configuration ---
 void setupOutsideScenarioLighting() {
     // Disable all lighting and clear to a pitch-black background
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -17,10 +13,12 @@ void setupOutsideScenarioLighting() {
     glDisable(GL_LIGHT3);
 }
 
+// --- Exit Scenario 3D Rendering ---
 void drawOutsideScenario() {
-    // Pitch-black scene representing the dark reality
+    // Pitch-black scene representing the dark reality after escaping the dungeon
 }
 
+// --- Exit Scenario Update ---
 void updateOutsideScenario() {
     if (fadeAlpha > 0.0f) {
         fadeAlpha -= 0.04f;
@@ -28,6 +26,7 @@ void updateOutsideScenario() {
     }
 }
 
+// --- Exit Scenario HUD / Ending Screen ---
 void drawOutsideScenarioHUD() {
     // 1. Semi-transparent dark overlay to ensure clean rendering
     glEnable(GL_BLEND);
@@ -45,11 +44,12 @@ void drawOutsideScenarioHUD() {
     glColor3f(1.0f, 0.2f, 0.2f);
     renderBitmapString(WINDOW_WIDTH / 2.0f - 240.0f, WINDOW_HEIGHT / 2.0f + 20.0f, GLUT_BITMAP_HELVETICA_18, "AI is replacing software engineers, go back to the dungeon!!!");
 
-    // 3. Return prompt in gray
+    // 3. Return prompt in gray (resets the entire quest from Chamber 1)
     glColor3f(0.6f, 0.6f, 0.6f);
     renderBitmapString(WINDOW_WIDTH / 2.0f - 110.0f, WINDOW_HEIGHT / 2.0f - 40.0f, GLUT_BITMAP_HELVETICA_12, "Press [R] to return to the dungeon...");
 }
 
+// --- Exit Scenario Interaction ---
 void handleOutsideScenarioInteraction() {
     // No interactions
 }

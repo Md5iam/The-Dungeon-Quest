@@ -10,11 +10,7 @@ extern float ch4TrapFallY;
 extern float ch4TrapFade;
 extern float ch4RumbleTimer;
 
-// Mirror angles for Chamber 4 (Mirror A and Mirror B)
-extern float ch4MirrorAngles[2]; 
-// Active light state
-extern bool ch4Light0On;
-extern bool ch4Light1On;
+
 
 // Continuous fan rotation angle
 extern float fanRotation;

@@ -287,6 +287,7 @@ static void drawDragonHologram() {
 
 // --- Draw Chamber 3 ---
 void drawChamber3() {
+    // 1. Draw base room geometry (octagonal room floor, ceiling, and walls)
     drawOctagonRoom3();
 
     // 2. Central Pedestal holding the Hologram
@@ -302,13 +303,14 @@ void drawChamber3() {
     glPopMatrix();
 
     // 3. Light Switch / Lever at front-left (-2.0, 3.8)
+    // Pulling this lever toggles the room light mode (Light Mode vs. Dark Mode)
     glPushMatrix();
     glTranslatef(-2.0f, 0.45f, 3.8f);
     drawPrism(0.3f, 0.9f, 0.3f, texStone, hasStoneTex, 0.4f, 0.4f, 0.4f, 1.0f, 1.0f);
     // Lever Base
     glTranslatef(0.0f, 0.45f, 0.0f);
     drawPrism(0.12f, 0.05f, 0.12f, texBox, hasBoxTex, 0.2f, 0.2f, 0.2f, 1.0f, 1.0f);
-    // Lever Handle
+    // Lever Handle rotation based on active state
     glPushMatrix();
     if (roomLight) {
         glRotatef(-30.0f, 1.0f, 0.0f, 0.0f); // Up / ON
@@ -327,6 +329,7 @@ void drawChamber3() {
     glPopMatrix();
 
     // 4. Target Frame on Back Wall at (-2.66, 1.30, -5.18)
+    // Visible only in Dark Mode. Players must align the central hologram cube inside this frame.
     if (!roomLight) {
         glPushMatrix();
         glTranslatef(-2.66f, 1.30f, -5.18f);
@@ -335,9 +338,9 @@ void drawChamber3() {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
         if (ch3Solved) {
-            glColor4f(1.0f, 0.85f, 0.1f, 0.85f); // Glowing Gold
+            glColor4f(1.0f, 0.85f, 0.1f, 0.85f); // Glowing Gold on success
         } else {
-            glColor4f(0.0f, 0.9f, 0.6f, 0.65f); // Glowing Neon Cyan
+            glColor4f(0.0f, 0.9f, 0.6f, 0.65f); // Glowing Neon Cyan while active
         }
 
         // Draw double square frame
@@ -360,7 +363,7 @@ void drawChamber3() {
         glPopMatrix();
     }
 
-    // Solution Guide Beacon (toggled with 'U' key)
+    // Solution Guide Beacon (toggled with 'U' key to show where the player should stand)
     if (showCh3SolutionGuide) {
         glDisable(GL_LIGHTING);
         glEnable(GL_BLEND);
@@ -415,8 +418,8 @@ void drawChamber3() {
         glPopMatrix();
     }
 
-    // 6. Exit Doors
-    // Left Door (Eye) at x = -1.2, z = -5.2
+    // 6. Exit Doors (Left = EYE [Trap], Right = MIRROR [Correct])
+    // Left Door (Eye)
     glPushMatrix();
     glTranslatef(-1.2f, 1.05f, -5.2f);
     drawPrism(0.9f, 2.1f, 0.08f, texWood, hasWoodTex, 0.45f, 0.28f, 0.12f, 1.0f, 3.0f);
@@ -424,7 +427,7 @@ void drawChamber3() {
     drawDoorText("EYE");
     glPopMatrix();
 
-    // Right Door (Mirror) at x = 1.2, z = -5.2
+    // Right Door (Mirror)
     glPushMatrix();
     glTranslatef(1.2f, 1.05f, -5.2f);
     drawPrism(0.9f, 2.1f, 0.08f, texWood, hasWoodTex, 0.45f, 0.28f, 0.12f, 1.0f, 3.0f);
@@ -433,6 +436,7 @@ void drawChamber3() {
     glPopMatrix();
 
     // 1. Render the Dragon Hologram & Rising Sparks (DRAW LAST!)
+    // Must be rendered after opaque geometry to prevent Z-depth blending glitches.
     drawDragonHologram();
     drawCh3Particles();
 }
@@ -483,7 +487,7 @@ void updateChamber3() {
     if (keyStates['a'] || keyStates['A'] || specialKeyStates[GLUT_KEY_LEFT]) rotY += TURN_SPEED;
     if (keyStates['d'] || keyStates['D'] || specialKeyStates[GLUT_KEY_RIGHT]) rotY -= TURN_SPEED;
 
-    // Flight controls
+    // 1. Flight controls (used to fly up/down to align with the vertical height of target frame)
     if (keyStates[' ']) { // Space to fly UP
         camY += 0.05f;
         if (camY > 4.5f) camY = 4.5f;
@@ -536,42 +540,42 @@ void updateChamber3() {
         }
     }
 
-    // Check perspective alignment
+    // 2. Check perspective alignment condition
+    // Distance from camera coordinates (camX, camY, camZ) to target position (targetCx, targetCy, targetCz)
     float posDiff = sqrt((camX - targetCx) * (camX - targetCx) +
                          (camY - targetCy) * (camY - targetCy) +
                          (camZ - targetCz) * (camZ - targetCz));
-    // Wrap rotY diff to [0, 360)
+    // Yaw rotation difference (normalized to 180 degrees max)
     float diffRy = fmod(fabs(rotY - targetRy), 360.0f);
     if (diffRy > 180.0f) diffRy = 360.0f - diffRy;
 
     float diffRx = fabs(rotX - targetRx);
     float rotDiff = sqrt(diffRx * diffRx + diffRy * diffRy);
 
-    // Solve if position, rotation, zoom, AND room is in Dark Mode
+    // Solve if position diff < 0.35, rotation diff < 6.0, zoom is at 45.0, AND room is in Dark Mode
     if (!roomLight && posDiff < 0.35f && rotDiff < 6.0f && fabs(zoomFov - 45.0f) < 4.0f) {
         ch3Solved = true;
     } else {
         ch3Solved = false;
     }
 
-    // Exit doors verification
+    // 3. Exit doors verification
+    // Riddle: "A container for reflection..." -> Answer: MIRROR (Right Door)
     if (hasCh3Key && camZ < -4.5f) {
-        // Left Door (Eye) at x = -1.2, z = -5.2
+        // Left Door (EYE) [TRAP]
         float dxL = camX - (-1.2f);
         float dzL = camZ - (-5.2f);
         if (sqrt(dxL * dxL + dzL * dzL) < 0.6f) {
-            // Incorrect Door (activates trap)
             isCh3FallingInTrap = true;
             ch3TrapFallY = 0.0f;
             ch3TrapFade = 0.0f;
             ch3RumbleTimer = 0.8f;
         }
 
-        // Right Door (Mirror) at x = 1.2, z = -5.2
+        // Right Door (MIRROR) [CORRECT] - Transition to Chamber 4 (Horror Stealth)
         float dxR = camX - 1.2f;
         float dzR = camZ - (-5.2f);
         if (sqrt(dxR * dxR + dzR * dzR) < 0.6f) {
-            // Success: Transition to Chamber 4 (STATE_CHAMBER_4)
             currentGameState = STATE_CHAMBER_4;
             camX = 0.0f; camY = 1.0f; camZ = 4.8f;
             rotX = 10.0f; rotY = 0.0f;

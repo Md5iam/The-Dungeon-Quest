@@ -119,9 +119,10 @@ void drawOctagonRoom() {
 
 // --- Main Chamber 1 Rendering ---
 void drawChamber1() {
+    // 1. Draw the basic octagonal stone room floor, walls, and ceiling
     drawOctagonRoom();
 
-    // Chandelier
+    // 2. Chandelier Hanging from the Ceiling
     glDisable(GL_LIGHTING); glColor3f(0.2f,0.2f,0.2f);
     glBegin(GL_LINES); glVertex3f(0,5.0f,0); glVertex3f(0,3.2f,0); glEnd();
     glEnable(GL_LIGHTING);
@@ -133,6 +134,7 @@ void drawChamber1() {
     glutSolidTorus(0.05f,0.3f,8,12);
     glPopMatrix();
 
+    // 3. Glowing Chandelier Light Core (Disabled during sequence reset blackout)
     if (ch1BlackoutTimer == 0.0f) {
         glDisable(GL_LIGHTING); glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
@@ -141,12 +143,13 @@ void drawChamber1() {
         glDisable(GL_BLEND); glEnable(GL_LIGHTING);
     }
 
-    // Statues
+    // 4. Interactive Statues Setup
+    // Colors: 0=Wolf (White), 1=Lion (Gold), 2=Eagle (Blue), 3=Snake (Green)
     float statueColors[4][3] = {{0.90f,0.90f,0.95f},{1.00f,0.75f,0.00f},{0.10f,0.40f,1.00f},{0.00f,0.85f,0.10f}};
     float statuePos[4][2] = {{-3.0f,-3.0f},{3.0f,-3.0f},{3.0f,3.0f},{-3.0f,3.0f}};
 
     for (int i = 0; i < 4; ++i) {
-        // Statue pillar (fully colored if selected, otherwise stone texture)
+        // Statue supporting pillar (Lit if selected, otherwise grey stone)
         glPushMatrix();
         glTranslatef(statuePos[i][0], 0.4f, statuePos[i][1]);
         if (platePressed[i]) {
@@ -158,10 +161,10 @@ void drawChamber1() {
         }
         glPopMatrix();
 
-        // Glowing Animal Symbol (Rotating Box)
+        // Glowing animal glyph box rotating on top of the pillar
         glPushMatrix();
         glTranslatef(statuePos[i][0], 1.0f, statuePos[i][1]);
-        glRotatef(statueBoxRot, 0.0f, 1.0f, 0.0f); // Rotate around Y axis like dragon animation
+        glRotatef(statueBoxRot, 0.0f, 1.0f, 0.0f); 
         
         GLuint activeTex = 0;
         bool hasActiveTex = false;
@@ -184,17 +187,17 @@ void drawChamber1() {
         glPopMatrix();
     }
 
-    // Central Pedestal
+    // 5. Central Pedestal
     glPushMatrix(); glTranslatef(0,0.25f,0);
     drawPrism(0.7f,0.5f,0.7f,texBox,hasBoxTex,0.40f,0.40f,0.40f,1,1.5f);
     glPopMatrix();
 
-    // Sliding Lid (slides open when solved)
+    // Pedestal Lid (slides open on solving)
     glPushMatrix(); glTranslatef(0, 0.52f, -0.35f - pedestalOpenProgress * 0.5f);
     drawPrism(0.72f,0.06f,0.72f,texBox,hasBoxTex,0.50f,0.50f,0.50f,1,1);
     glPopMatrix();
 
-    // Golden Key (visible only when solved)
+    // 6. Golden Key (spawns floating/spinning inside pedestal when solved)
     if (ch1Solved && !hasKey) {
         static float keyRot = 0.0f; keyRot += 1.5f;
         glPushMatrix();
@@ -208,11 +211,13 @@ void drawChamber1() {
         glPopMatrix();
     }
 
-    // Exit Doors
+    // 7. Exit Doors (Left = SUN [Correct], Right = MOON [Trap])
+    // SUN door
     glPushMatrix(); glTranslatef(-1.2f,1.05f,-5.2f);
     drawPrism(0.9f,2.1f,0.08f,texWood,hasWoodTex,0.45f,0.28f,0.12f,1,3);
     glTranslatef(0,0,0.041f); drawDoorText("SUN"); glPopMatrix();
 
+    // MOON door
     glPushMatrix(); glTranslatef(1.2f,1.05f,-5.2f);
     drawPrism(0.9f,2.1f,0.08f,texWood,hasWoodTex,0.45f,0.28f,0.12f,1,3);
     glTranslatef(0,0,0.041f); drawDoorText("MOON"); glPopMatrix();
@@ -365,21 +370,27 @@ void drawChamber1HUD() {
 }
 
 void handleChamber1Interaction() {
+    // Statue positions mapping: 0=Wolf, 1=Lion, 2=Eagle, 3=Snake
     float statuePos[4][2] = {{-3.0f,-3.0f},{3.0f,-3.0f},{3.0f,3.0f},{-3.0f,3.0f}};
     for (int i = 0; i < 4; ++i) {
         float dx = camX - statuePos[i][0];
         float dz = camZ - statuePos[i][1];
+        // If the player is standing within 1.0 unit of the statue
         if (sqrt(dx * dx + dz * dz) < 1.0f) {
             if (!platePressed[i]) {
                 platePressed[i] = true;
                 plateOrder.push_back(i);
                 std::cout << "Selected statue " << i << std::endl;
                 ch1RumbleTimer = 0.15f;
+                
+                // When 4 statues have been selected, check sequence correctness
                 if (plateOrder.size() == 4) {
+                    // Correct Sequence: 0 (Wolf) -> 1 (Lion) -> 2 (Eagle) -> 3 (Snake)
                     if (plateOrder[0] == 0 && plateOrder[1] == 1 && plateOrder[2] == 2 && plateOrder[3] == 3) {
                         ch1Solved = true;
                         std::cout << "SUCCESS! Statues selected in the correct order!" << std::endl;
                     } else {
+                        // WRONG SEQUENCE: Trigger blackout overlay and reset selection state
                         ch1BlackoutTimer = 0.8f;
                         ch1RumbleTimer = 0.5f;
                         plateOrder.clear();

@@ -12,6 +12,41 @@
 #include "chamber4.h"
 #include "outside.h"
 
+/*
+ * =========================================================================
+ *                   THE DUNGEON QUEST - MAIN GAME ENGINE
+ * =========================================================================
+ * This file acts as the primary game controller, coordinating the game states
+ * (GameState enum) and routing logic (render, update, and inputs) to the
+ * respective chamber modules:
+ *
+ *   1. STATE_OUTSIDE & STATE_ENTERING (dungeon_game.cpp):
+ *      - Initial entrance gates scenario. Uses local sparks particles & torch flicker.
+ *
+ *   2. STATE_CHAMBER_1 (chamber1.cpp):
+ *      - Chamber of Sequence: Players must walk up to statues and select them 
+ *        in the correct sequence order (Wolf -> Lion -> Eagle -> Snake).
+ *
+ *   3. STATE_CHAMBER_2 (chamber2.cpp):
+ *      - Chamber of Rings: Alignment puzzle where concentric rings are rotated 
+ *        to match specific orientations.
+ *
+ *   4. STATE_CHAMBER_3 (chamber3.cpp):
+ *      - Chamber of Dragon Illusion: Light/Dark mode alignment puzzle. Turn off 
+ *        lights, stand on solution coordinates, and align a dragon relic hologram.
+ *
+ *   5. STATE_CHAMBER_4 (chamber4.cpp):
+ *      - Chamber 4: Ghost Escape Hall (Horror Stealth): Sneak around stone partition 
+ *        walls to collect 4 colored gem fragments, hide in corner cabinets, 
+ *        retrieve the key from the center pedestal, and escape the patrolling ghost.
+ *
+ *   6. STATE_OUTSIDE_SCENARIO (outside.cpp):
+ *      - Red text message stating AI is replacing engineers, prompt to press R to return.
+ *
+ *   7. STATE_VICTORY (dungeon_game.cpp):
+ *      - Final escape screen showing completion details.
+ * =========================================================================
+ */
 GameState currentGameState = STATE_OUTSIDE;
 
 // --- Textures ---
@@ -704,26 +739,17 @@ void display() {
             fallY = ch4TrapFallY;
         }
 
-        if (currentGameState == STATE_OUTSIDE_SCENARIO && cinematicMode) {
-            float cX = 16.0f * cos(cameraOrbitAngle);
-            float cZ = 16.0f * sin(cameraOrbitAngle);
-            float cY = 4.2f + 1.2f * sin(cameraOrbitAngle * 2.0f);
-            gluLookAt(cX, cY, cZ,
-                      0.0f, 0.8f, 0.0f,
-                      0.0f, 1.0f, 0.0f);
-        } else {
-            float radY = rotY * PI / 180.0f;
-            float radX = rotX * PI / 180.0f;
+        float radY = rotY * PI / 180.0f;
+        float radX = rotX * PI / 180.0f;
 
-            // Calculate direction vector from Euler angles
-            float dirX = -sin(radY) * cos(radX);
-            float dirY = -sin(radX);
-            float dirZ = -cos(radY) * cos(radX);
+        // Calculate direction vector from Euler angles
+        float dirX = -sin(radY) * cos(radX);
+        float dirY = -sin(radX);
+        float dirZ = -cos(radY) * cos(radX);
 
-            gluLookAt(camX + rumbleX, camY + rumbleY - fallY, camZ,
-                      camX + rumbleX + dirX, camY + rumbleY - fallY + dirY, camZ + dirZ,
-                      0.0f, 1.0f, 0.0f);
-        }
+        gluLookAt(camX + rumbleX, camY + rumbleY - fallY, camZ,
+                  camX + rumbleX + dirX, camY + rumbleY - fallY + dirY, camZ + dirZ,
+                  0.0f, 1.0f, 0.0f);
     } else {
         // Outside scene camera
         gluLookAt(camX, camY, camZ,
@@ -738,19 +764,31 @@ void display() {
 
     // 3. Render Scene
     if (currentGameState == STATE_OUTSIDE || currentGameState == STATE_ENTERING) {
+        // [SCENARIO: DUNGEON ENTRANCE]
+        // Renders the initial outdoor gates, sky, torches, and spark particles defined here in dungeon_game.cpp.
         drawSky();
         drawGround();
         drawDungeonEntrance();
         drawSparks();
     } else if (currentGameState == STATE_CHAMBER_1) {
+        // [SCENARIO: CHAMBER 1 - SEQUENCE PUZZLE]
+        // Renders the statues, glowing sequence pillars, pedestal, and SUN/MOON exit doors from chamber1.cpp.
         drawChamber1();
     } else if (currentGameState == STATE_CHAMBER_2) {
+        // [SCENARIO: CHAMBER 2 - CONCENTRIC RINGS]
+        // Renders the 3 rotating concentric rings and the CLOCK/HOURGLASS exit doors from chamber2.cpp.
         drawChamber2();
     } else if (currentGameState == STATE_CHAMBER_3) {
+        // [SCENARIO: CHAMBER 3 - DRAGON ILLUSION]
+        // Renders the light switch lever, dragon hologram relic, target frame, and EYE/MIRROR exit doors from chamber3.cpp.
         drawChamber3();
     } else if (currentGameState == STATE_CHAMBER_4 || currentGameState == STATE_VICTORY) {
+        // [SCENARIO: CHAMBER 4 - GHOST ESCAPE HALL]
+        // Renders the maze walls, cabinets, 4 gems, patrolling/chasing tattered ghost, and exit door from chamber4.cpp.
         drawChamber4();
     } else if (currentGameState == STATE_OUTSIDE_SCENARIO) {
+        // [SCENARIO: OUTSIDE GAME EXIT]
+        // Renders the pitch-black exit scene defined in outside.cpp.
         drawOutsideScenario();
     }
 
@@ -795,14 +833,19 @@ void update(int value) {
     }
 
     if (currentGameState == STATE_CHAMBER_1) {
+        // [UPDATE: CHAMBER 1] Statue rotation, blackout timers, sequence checking, and trap animations.
         updateChamber1();
     } else if (currentGameState == STATE_CHAMBER_2) {
+        // [UPDATE: CHAMBER 2] Decelerates ring rotation speed, checks key alignment, and runs trap animation.
         updateChamber2();
     } else if (currentGameState == STATE_CHAMBER_3) {
+        // [UPDATE: CHAMBER 3] Rotates hologram relic, updates floating sparks particles, slides pedestal lid.
         updateChamber3();
     } else if (currentGameState == STATE_CHAMBER_4) {
+        // [UPDATE: CHAMBER 4] Updates ghost AI pathfinding waypoints, check player exposure/hiding cabinets.
         updateChamber4();
     } else if (currentGameState == STATE_OUTSIDE_SCENARIO) {
+        // [UPDATE: OUTSIDE EXIT] Updates camera movement fade transitions.
         updateOutsideScenario();
     }
 
@@ -873,38 +916,7 @@ void keyboard(unsigned char key, int x, int y) {
                 zoomFov += 2.0f;
                 if (zoomFov > 60.0f) zoomFov = 60.0f;
             }
-            break;
-        case '1':
-            if (currentGameState == STATE_CHAMBER_4) {
-                ch4Light0On = !ch4Light0On;
-                std::cout << "Light 0 toggled: " << (ch4Light0On ? "ON" : "OFF") << std::endl;
-            }
-            break;
-        case '2':
-            if (currentGameState == STATE_CHAMBER_4) {
-                ch4Light1On = !ch4Light1On;
-                std::cout << "Light 1 toggled: " << (ch4Light1On ? "ON" : "OFF") << std::endl;
-            }
-            break;
-        case 'c': case 'C':
-            if (currentGameState == STATE_OUTSIDE_SCENARIO) {
-                cinematicMode = !cinematicMode;
-                if (!cinematicMode) {
-                    camX = 0.0f; camY = 1.0f; camZ = 5.0f;
-                    rotX = 5.0f; rotY = 0.0f;
-                }
-                std::cout << "C key pressed! Cinematic mode toggle: " << (cinematicMode ? "ACTIVE" : "INACTIVE") << std::endl;
-            }
-            break;
-        case 'n': case 'N':
-            if (currentGameState == STATE_OUTSIDE_SCENARIO) {
-                if (sin(sunAngle) > 0.0f) {
-                    sunAngle = 3.9f;
-                } else {
-                    sunAngle = 0.8f;
-                }
-                std::cout << "N key pressed! Advanced sun angle to toggle Day/Night." << std::endl;
-            }
+
             break;
         case 'k': case 'K':
             if (currentGameState == STATE_OUTSIDE) {

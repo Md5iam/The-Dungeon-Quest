@@ -496,20 +496,23 @@ void setupChamber2Lighting() {
 void handleChamber2Interaction() {
     if (currentGameState != STATE_CHAMBER_2 || ch2Solved || isCh2FallingInTrap) return;
 
+    // Check proximity to the three rotation controllers (Wheels A, B, C)
     for (int i = 0; i < 3; ++i) {
         float dx = camX - WHEEL_POS[i][0];
         float dz = camZ - WHEEL_POS[i][1];
         if (sqrt(dx * dx + dz * dz) < 0.8f) {
-            // Trigger wheel rotation
-            ch2RumbleTimer = 0.15f; // Short haptic screen rumble
+            ch2RumbleTimer = 0.15f; // Short screen rumble to simulate pull force
 
             if (i == 0) {
+                // Wheel A rotates only the Outer Ring
                 targetRingAngle1 += 90.0f;
                 std::cout << "Wheel A pulled -> Rotating Outer Ring to " << targetRingAngle1 << std::endl;
             } else if (i == 1) {
+                // Wheel B rotates only the Middle Ring
                 targetRingAngle2 += 90.0f;
                 std::cout << "Wheel B pulled -> Rotating Middle Ring to " << targetRingAngle2 << std::endl;
             } else if (i == 2) {
+                // Wheel C rotates BOTH Middle & Inner Rings (linked puzzle difficulty)
                 targetRingAngle2 += 90.0f;
                 targetRingAngle3 += 90.0f;
                 std::cout << "Wheel C pulled -> Rotating Middle & Inner Rings" << std::endl;
@@ -526,7 +529,7 @@ void updateChamber2() {
         if (fadeAlpha < 0.0f) fadeAlpha = 0.0f;
     }
 
-    // Smooth Ring Rotation Interpolation
+    // 1. Smooth Ring Rotation Interpolation (lerps current angle towards target angle)
     ringAngle1 += (targetRingAngle1 - ringAngle1) * 0.1f;
     ringAngle2 += (targetRingAngle2 - ringAngle2) * 0.1f;
     ringAngle3 += (targetRingAngle3 - ringAngle3) * 0.1f;
@@ -547,7 +550,7 @@ void updateChamber2() {
         if (ch2RumbleTimer < 0.0f) ch2RumbleTimer = 0.0f;
     }
 
-    // Check Trap Falling
+    // 2. Check Trap Falling Animation (resets chamber when finished)
     if (isCh2FallingInTrap) {
         ch2TrapFallY += 0.12f;
         ch2TrapFade += 0.02f;
@@ -561,7 +564,7 @@ void updateChamber2() {
             resetChamber2();
         }
     } else {
-        // Player Movement (allow only if not falling)
+        // Player Movement
         const float PLAYER_SPEED = 0.06f;
         const float TURN_SPEED = 1.8f;
 
@@ -617,7 +620,8 @@ void updateChamber2() {
             }
         }
 
-        // Check Puzzle Alignment (Sun, Eagle, Fire aligned at top 12 o'clock => 0 mod 360 target angles)
+        // 3. Check Puzzle Alignment
+        // Sun, Eagle, Fire aligned at top 12 o'clock => angles are multiples of 360 deg (0 mod 360)
         if (!ch2Solved) {
             int a1 = ((int)targetRingAngle1) % 360;
             int a2 = ((int)targetRingAngle2) % 360;
@@ -639,13 +643,13 @@ void updateChamber2() {
             }
         }
 
-        // Exit Doors Riddle
+        // 4. Exit Doors Riddle Verification
+        // Riddle: "What has hands but cannot clap?" -> Answer: CLOCK (Left Door)
         if (hasCh2Key && camZ < -4.5f) {
-            // Left Door (Clock): x = -1.2, z = -5.2
+            // Left Door (CLOCK) [CORRECT] - Transition to Chamber 3
             float dxL = camX - (-1.2f);
             float dzL = camZ - (-5.2f);
             if (sqrt(dxL * dxL + dzL * dzL) < 0.6f) {
-                // Success! Transition to Chamber 3
                 currentGameState = STATE_CHAMBER_3;
                 camX = 0.0f; camY = 1.0f; camZ = 4.8f;
                 rotX = 10.0f; rotY = 0.0f;
@@ -653,11 +657,10 @@ void updateChamber2() {
                 resetChamber3();
             }
 
-            // Right Door (Hourglass): x = 1.2, z = -5.2
+            // Right Door (HOURGLASS) [TRAP] - Trigger trap animation
             float dxR = camX - 1.2f;
             float dzR = camZ - (-5.2f);
             if (sqrt(dxR * dxR + dzR * dzR) < 0.6f) {
-                // Fail! Trap activated
                 isCh2FallingInTrap = true;
                 ch2TrapFallY = 0.0f;
                 ch2TrapFade = 0.0f;

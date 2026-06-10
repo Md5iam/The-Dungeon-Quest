@@ -14,10 +14,7 @@ float ch4TrapFade = 0.0f;
 float ch4RumbleTimer = 0.0f;
 float ch4PedestalOpenProgress = 0.0f;
 
-// Legacy variables declared in header to satisfy linker
-float ch4MirrorAngles[2] = {0.0f, 0.0f};
-bool ch4Light0On = false;
-bool ch4Light1On = false;
+
 float fanRotation = 0.0f;
 
 // Pedestal coordinates (center of the room)
@@ -322,7 +319,7 @@ void drawChamber4() {
     float r = 6.0f;
     float h = 5.0f;
 
-    // 1. Draw Octagonal Room Floors & Ceilings (Darkened for haunted look)
+    // 1. Draw Octagonal Room Floors & Ceilings (Darkened mossy look)
     glEnable(GL_TEXTURE_2D);
     if (hasGroundTex) {
         glBindTexture(GL_TEXTURE_2D, texGround);
@@ -332,7 +329,7 @@ void drawChamber4() {
         glColor3f(1.0f, 1.0f, 1.0f);
     }
 
-    GLfloat floorAmb[]  = { 0.25f, 0.25f, 0.25f, 1.0f }; // Slightly darker ambient for horror look
+    GLfloat floorAmb[]  = { 0.25f, 0.25f, 0.25f, 1.0f };
     GLfloat floorDiff[] = { 0.5f,  0.5f,  0.5f,  1.0f };
     GLfloat floorSpec[] = { 0.0f,  0.0f,  0.0f,  1.0f };
     glMaterialfv(GL_FRONT, GL_AMBIENT,  floorAmb);
@@ -369,7 +366,7 @@ void drawChamber4() {
     }
     glEnd();
 
-    // Mossy dark green wall tinting for haunted look
+    // Outer Room Walls
     glColor3f(0.18f, 0.24f, 0.18f);
     for (int i = 0; i < 8; ++i) {
         float angle1 = i * 45.0f * PI / 180.0f;
@@ -391,7 +388,7 @@ void drawChamber4() {
     }
     glDisable(GL_TEXTURE_2D);
 
-    // 2. Draw Partition Walls (Moldy green-grey tint)
+    // 2. Draw Partition Walls (Splits the chamber into central hallway + 4 corner rooms)
     // Northwest Room 1
     glPushMatrix();
     glTranslatef(-3.75f, 1.25f, -2.0f);
@@ -432,17 +429,17 @@ void drawChamber4() {
     drawPrism(0.2f, 2.5f, 2.3f, texStone, hasStoneTex, 0.2f, 0.25f, 0.2f, 1.0f, 1.0f); // Wall V
     glPopMatrix();
 
-    // 3. Draw Hiding Cabinets
+    // 3. Draw Hiding Cabinets (Used by player to break line of sight and hide from the ghost)
     for (int i = 0; i < 4; ++i) {
         drawCabinet(cabinetPos[i][0], cabinetPos[i][1]);
     }
 
-    // 4. Draw Collectible Gems
+    // 4. Draw Collectible Gems (NW=Blue, NE=Green, SW=Orange, SE=Purple)
     float gemColor[4][3] = {
-        {0.1f, 0.5f, 1.0f}, // NW: Blue
-        {0.1f, 1.0f, 0.3f}, // NE: Green
-        {1.0f, 0.5f, 0.1f}, // SW: Orange
-        {0.8f, 0.1f, 1.0f}  // SE: Purple
+        {0.1f, 0.5f, 1.0f}, // NW
+        {0.1f, 1.0f, 0.3f}, // NE
+        {1.0f, 0.5f, 0.1f}, // SW
+        {0.8f, 0.1f, 1.0f}  // SE
     };
     for (int i = 0; i < 4; ++i) {
         if (!itemCollected[i]) {
@@ -457,13 +454,13 @@ void drawChamber4() {
         }
     }
 
-    // 5. Pedestal (Key Box) - Moved to SW Room 3 Corner
+    // 5. Pedestal (Key Box) - Centered in the main hall
     glPushMatrix();
     glTranslatef(pedestalX, 0.25f, pedestalZ);
     drawPrism(0.8f, 0.5f, 0.8f, texBox, hasBoxTex, 0.45f, 0.45f, 0.45f, 1.0f, 1.5f);
     glPopMatrix();
 
-    // Pedestal Lid (slides open when solved)
+    // Pedestal Lid (slides open when all 4 gems are collected)
     glPushMatrix();
     glTranslatef(pedestalX, 0.52f, pedestalZ - 0.4f - ch4PedestalOpenProgress * 0.5f);
     drawPrism(0.82f, 0.06f, 0.82f, texBox, hasBoxTex, 0.55f, 0.55f, 0.55f, 1.0f, 1.0f);
@@ -482,7 +479,7 @@ void drawChamber4() {
         glPopMatrix();
     }
 
-    // 6. Patrolling Ghost & Particles
+    // 6. Patrolling Ghost & Ghost trailing particle system
     drawGhost();
     drawGhostParticles();
 
@@ -506,7 +503,8 @@ void drawChamber4() {
     glDisable(GL_BLEND);
     glEnable(GL_LIGHTING);
 
-    // 9. Single Exit Door (Golden Door at center)
+    // 9. Single Exit Door (Golden Door at center back)
+    // Leads to Outside Scenario when key is possessed
     glPushMatrix();
     glTranslatef(0.0f, 1.05f, -5.2f);
     drawPrism(1.1f, 2.2f, 0.08f, texWood, hasWoodTex, 0.9f, 0.75f, 0.1f, 1.0f, 3.0f);
@@ -574,7 +572,8 @@ void updateChamber4() {
     // 1. Ghost particles update
     updateGhostParticles();
 
-    // 2. Proximity checks for Cabinets (Hiding Status)
+    // 2. Cabinet Proximity check (Hiding Mechanic)
+    // If player stands close enough to a cabinet, they hide.
     bool nearCab = false;
     for (int i = 0; i < 4; ++i) {
         float dx = camX - cabinetPos[i][0];
@@ -586,7 +585,7 @@ void updateChamber4() {
     }
     isPlayerHidden = nearCab;
 
-    // 3. Proximity check for Gems (Collection)
+    // 3. Gem Collection Proximity check
     int collectedCount = 0;
     for (int i = 0; i < 4; ++i) {
         if (!itemCollected[i]) {
@@ -602,6 +601,7 @@ void updateChamber4() {
         if (itemCollected[i]) collectedCount++;
     }
 
+    // Slide open lid when all 4 gems are gathered
     if (collectedCount == 4) {
         if (!ch4Solved) {
             ch4Solved = true;
@@ -615,29 +615,29 @@ void updateChamber4() {
         if (ch4PedestalOpenProgress > 1.0f) ch4PedestalOpenProgress = 1.0f;
     }
 
-    // 4. Ghost AI State Machine
+    // 4. Ghost AI State Machine (0 = Patrol, 1 = Chase)
     float dx = camX - ghostX;
     float dz = camZ - ghostZ;
     float distToPlayer = sqrt(dx*dx + dz*dz);
 
     if (isPlayerHidden) {
-        // Lost chase if player hides
+        // Player is hidden inside cabinet -> Ghost drops chase and returns to patrol
         ghostState = 0;
     } else {
         if (ghostState == 0) {
-            // Patrol: check if player enters detection range
+            // PATROL STATE: If player comes within detection range (2.0), trigger CHASE MODE
             if (distToPlayer < 2.0f) {
-                ghostState = 1; // Chase Mode!
+                ghostState = 1; // Enter Chase Mode!
                 ch4RumbleTimer = 0.35f;
                 HUDFeedbackTimer = 2.0f;
                 HUDFeedbackMsg = "THE GHOST HAS DETECTED YOU! RUN!";
             }
         } else {
-            // Chase: check if player escaped or got caught
+            // CHASE STATE: Check if player escaped or got caught
             if (distToPlayer > 4.5f) {
-                ghostState = 0; // return to patrol
+                ghostState = 0; // Lost line of sight, return to patrol
             } else if (distToPlayer < 0.6f) {
-                // Caught! Jumpscare trigger
+                // CAUGHT! Trigger jumpscare flash and reset chamber
                 caughtRedFlash = 1.0f;
                 ch4RumbleTimer = 1.0f;
                 camX = 0.0f; camY = 1.0f; camZ = 4.8f;
@@ -650,33 +650,33 @@ void updateChamber4() {
         }
     }
 
-    // 5. Ghost Movement
+    // 5. Ghost Movement Logic
     if (ghostState == 0) {
-        // Patrol movement between waypoints
+        // Patrol movement between waypoint coordinates
         float tx = ghostWaypoints[currentWaypointIndex][0];
         float tz = ghostWaypoints[currentWaypointIndex][1];
         float gdx = tx - ghostX;
         float gdz = tz - ghostZ;
         float glen = sqrt(gdx*gdx + gdz*gdz);
         if (glen < 0.15f) {
-            // Advance to next waypoint index
+            // Cycle through waypoint path nodes
             static const int sequence[] = {0, 1, 0, 2, 0, 3, 0, 4};
             static int seqIdx = 0;
             seqIdx = (seqIdx + 1) % 8;
             currentWaypointIndex = sequence[seqIdx];
         } else {
-            ghostX += (gdx / glen) * 0.024f;
+            ghostX += (gdx / glen) * 0.024f; // Normal slow patrol speed
             ghostZ += (gdz / glen) * 0.024f;
         }
     } else {
-        // Chase movement directly towards player
+        // Chase movement directly towards player position
         if (distToPlayer > 0.0f) {
-            ghostX += (dx / distToPlayer) * 0.052f; // Fast chase
+            ghostX += (dx / distToPlayer) * 0.052f; // Fast chase speed
             ghostZ += (dz / distToPlayer) * 0.052f;
         }
     }
 
-    // 6. Player Movement & Keyboard Checks
+    // 6. Player Movement & Keyboard Controls
     const float PLAYER_SPEED = 0.055f;
     const float TURN_SPEED = 1.8f;
 
@@ -711,9 +711,8 @@ void updateChamber4() {
         }
     }
 
-    // 7. Door transition logic
+    // 7. Door Transition to Outside Scenario
     if (hasCh4Key && camZ < -4.5f) {
-        // Single Exit Door at center (Success / Transition to Outside Scenario)
         if (fabs(camX - 0.0f) < 0.6f) {
             currentGameState = STATE_OUTSIDE_SCENARIO;
             camX = 0.0f; camY = 1.0f; camZ = 5.0f;
