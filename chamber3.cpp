@@ -16,12 +16,32 @@ float ch3BlackoutTimer = 0.0f;
 float ch3RumbleTimer = 0.0f;
 bool showCh3SolutionGuide = false;
 
-// Target viewpoint coordinates
+// Target viewpoint coordinates (kept for compatibility)
 const float targetCx = 1.8f;
 const float targetCy = 2.2f;
 const float targetCz = 3.5f;
 const float targetRx = 20.0f;
 const float targetRy = 25.0f;
+
+// --- Color Matching Puzzle ---
+// 4 tiles: 0=Red, 1=Blue, 2=Green, 3=Yellow
+// Tile positions (x, z)
+static const float tileX[4] = { -3.0f,  3.0f, -3.0f,  3.0f };
+static const float tileZ[4] = { -3.0f, -3.0f,  3.0f,  3.0f };
+static const float tileR[4] = { 1.0f, 0.2f, 0.1f, 1.0f };
+static const float tileG[4] = { 0.1f, 0.3f, 1.0f, 0.9f };
+static const float tileB[4] = { 0.1f, 1.0f, 0.2f, 0.1f };
+// Red=0, Blue=1, Green=2, Yellow=3
+
+static float holoColorTimer = 0.0f;
+static int   holoColorIndex = 0;
+static bool  colorMatched[4] = {false, false, false, false};
+static int   matchCount = 0;
+static float matchFlashTimer = 0.0f;
+static float wrongFlashTimer = 0.0f;
+static bool  wrongTileFlash = false;
+static float tileCooldown = 0.0f;
+static int   lastTileIndex = -1;  // which tile player is currently ON (-1 = none)
 
 // --- Hologram Particle System ---
 struct Ch3Particle {
@@ -41,12 +61,12 @@ static void initCh3Particle(Ch3Particle &p) {
     p.z = radius * sin(angle);
 
     p.vx = -sin(angle) * 0.005f + (((float)rand() / RAND_MAX) - 0.5f) * 0.002f;
-    p.vy = 0.006f + ((float)rand() / RAND_MAX) * 0.006f; // Drift upwards
+    p.vy = 0.006f + ((float)rand() / RAND_MAX) * 0.006f;
     p.vz = cos(angle) * 0.005f + (((float)rand() / RAND_MAX) - 0.5f) * 0.002f;
 
-    p.r = 0.0f; 
-    p.g = 0.75f + ((float)rand() / RAND_MAX) * 0.25f; 
-    p.b = 1.0f; // Cyan-blue neon glow
+    p.r = 0.0f;
+    p.g = 0.75f + ((float)rand() / RAND_MAX) * 0.25f;
+    p.b = 1.0f;
     p.alpha = 0.4f + ((float)rand() / RAND_MAX) * 0.6f;
     p.life = 0.5f + ((float)rand() / RAND_MAX) * 1.0f;
 }
@@ -55,7 +75,7 @@ static void initCh3ParticleSystem() {
     ch3Particles.resize(CH3_MAX_PARTICLES);
     for (int i = 0; i < CH3_MAX_PARTICLES; ++i) {
         initCh3Particle(ch3Particles[i]);
-        ch3Particles[i].life = ((float)rand() / RAND_MAX); // disperse initial life
+        ch3Particles[i].life = ((float)rand() / RAND_MAX);
     }
 }
 
@@ -83,12 +103,11 @@ static void drawCh3Particles() {
     glBegin(GL_POINTS);
     for (const auto &p : ch3Particles) {
         if (ch3Solved) {
-            // Gold particles when solved
             glColor4f(1.0f, 0.8f, 0.1f, p.alpha);
         } else if (!roomLight) {
             glColor4f(p.r, p.g, p.b, p.alpha);
         } else {
-            glColor4f(p.r, p.g, p.b, p.alpha * 0.2f); // very faint in light mode
+            glColor4f(p.r, p.g, p.b, p.alpha * 0.2f);
         }
         glVertex3f(p.x, p.y, p.z);
     }
@@ -131,7 +150,7 @@ void drawOctagonRoom3() {
     }
     glEnd();
 
-    // Ceiling (keep stone)
+    // Ceiling
     glBindTexture(GL_TEXTURE_2D, texStone);
 
     GLfloat ceilAmb[]  = { 0.4f, 0.4f, 0.4f, 1.0f };
@@ -157,7 +176,6 @@ void drawOctagonRoom3() {
         float x1 = r * cos(angle1), z1 = r * sin(angle1);
         float x2 = r * cos(angle2), z2 = r * sin(angle2);
 
-        // Normal pointing inward
         float mx = (x1 + x2) / 2.0f;
         float mz = (z1 + z2) / 2.0f;
         float len = sqrt(mx*mx + mz*mz);
@@ -189,20 +207,22 @@ static void drawDragonHologram() {
     glDepthMask(GL_FALSE);
     glDisable(GL_LIGHTING);
 
-    // Hologram Color
     if (ch3Solved) {
-        glColor4f(1.0f, 0.85f, 0.1f, 0.85f); // Glowing Gold
+        glColor4f(1.0f, 0.85f, 0.1f, 0.85f);
     } else if (!roomLight) {
-        glColor4f(0.0f, 0.7f, 1.0f, 0.7f);   // Mystic Blue
+        float pulse = 0.65f + 0.35f * sin(holoColorTimer * 5.0f);
+        glColor4f(tileR[holoColorIndex] * pulse,
+                  tileG[holoColorIndex] * pulse,
+                  tileB[holoColorIndex] * pulse,
+                  0.9f);
     } else {
-        glColor4f(0.0f, 0.7f, 1.0f, 0.12f);  // Faded in Light Mode
+        glColor4f(0.4f, 0.4f, 0.4f, 0.15f);
     }
 
-    // 1. Draw Textured Cube (Relic)
     if (hasDragonTex && texDragon != 0) {
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, texDragon);
-        
+
         float h = 0.35f;
         glBegin(GL_QUADS);
         // Front
@@ -242,13 +262,12 @@ static void drawDragonHologram() {
         glTexCoord2f(1.0f, 1.0f); glVertex3f( h, -h,  h);
         glTexCoord2f(0.0f, 1.0f); glVertex3f(-h, -h,  h);
         glEnd();
-        
+
         glDisable(GL_TEXTURE_2D);
     } else {
         glutWireCube(0.7f);
     }
 
-    // 2. Wireframe Gold/Cyan Relic Borders
     float h = 0.35f;
     float thick = 0.02f;
     for (float x : {-h, h}) {
@@ -273,7 +292,6 @@ static void drawDragonHologram() {
         glPopMatrix();
     }
 
-    // 3. Orbiting Hologram Rings
     glPushMatrix();
     glRotatef(holoRot * 1.5f, 1.0f, 0.5f, 0.0f);
     glutWireSphere(0.55f, 12, 12);
@@ -287,39 +305,72 @@ static void drawDragonHologram() {
 
 // --- Draw Chamber 3 ---
 void drawChamber3() {
-    // 1. Draw base room geometry (octagonal room floor, ceiling, and walls)
     drawOctagonRoom3();
 
-    // 2. Central Pedestal holding the Hologram
+    // === COLOR MATCHING TILES on floor ===
+    glDisable(GL_TEXTURE_2D);
+    for (int i = 0; i < 4; i++) {
+        glPushMatrix();
+        glTranslatef(tileX[i], 0.02f, tileZ[i]);
+
+        float pulse = 0.7f + 0.3f * sin(holoColorTimer * 3.0f + i);
+
+        if (colorMatched[i]) {
+            glColor3f(1.0f, 0.95f, 0.4f);
+        } else if (holoColorIndex == i) {
+            glColor3f(tileR[i] * pulse, tileG[i] * pulse, tileB[i] * pulse);
+        } else {
+            glColor3f(tileR[i] * 0.35f, tileG[i] * 0.35f, tileB[i] * 0.35f);
+        }
+
+        glDisable(GL_LIGHTING);
+        glBegin(GL_QUADS);
+        glVertex3f(-0.7f, 0.0f, -0.7f);
+        glVertex3f( 0.7f, 0.0f, -0.7f);
+        glVertex3f( 0.7f, 0.0f,  0.7f);
+        glVertex3f(-0.7f, 0.0f,  0.7f);
+        glEnd();
+
+        glColor3f(tileR[i], tileG[i], tileB[i]);
+        glLineWidth(2.5f);
+        glBegin(GL_LINE_LOOP);
+        glVertex3f(-0.7f, 0.01f, -0.7f);
+        glVertex3f( 0.7f, 0.01f, -0.7f);
+        glVertex3f( 0.7f, 0.01f,  0.7f);
+        glVertex3f(-0.7f, 0.01f,  0.7f);
+        glEnd();
+        glLineWidth(1.0f);
+        glEnable(GL_LIGHTING);
+
+        glPopMatrix();
+    }
+
+    // 2. Central Pedestal
     glPushMatrix();
     glTranslatef(0.0f, 0.25f, 0.0f);
     drawPrism(0.7f, 0.5f, 0.7f, texBox, hasBoxTex, 0.40f, 0.40f, 0.40f, 1.0f, 1.5f);
     glPopMatrix();
 
-    // Pedestal Lid (slides open when solved)
+    // Pedestal Lid
     glPushMatrix();
     glTranslatef(0.0f, 0.52f, -0.35f - ch3PedestalOpenProgress * 0.5f);
     drawPrism(0.72f, 0.06f, 0.72f, texBox, hasBoxTex, 0.50f, 0.50f, 0.50f, 1.0f, 1.0f);
     glPopMatrix();
 
-    // 3. Light Switch / Lever at front-left (-2.0, 3.8)
-    // Pulling this lever toggles the room light mode (Light Mode vs. Dark Mode)
+    // 3. Light Switch / Lever
     glPushMatrix();
     glTranslatef(-2.0f, 0.45f, 3.8f);
     drawPrism(0.3f, 0.9f, 0.3f, texStone, hasStoneTex, 0.4f, 0.4f, 0.4f, 1.0f, 1.0f);
-    // Lever Base
     glTranslatef(0.0f, 0.45f, 0.0f);
     drawPrism(0.12f, 0.05f, 0.12f, texBox, hasBoxTex, 0.2f, 0.2f, 0.2f, 1.0f, 1.0f);
-    // Lever Handle rotation based on active state
     glPushMatrix();
     if (roomLight) {
-        glRotatef(-30.0f, 1.0f, 0.0f, 0.0f); // Up / ON
+        glRotatef(-30.0f, 1.0f, 0.0f, 0.0f);
     } else {
-        glRotatef(30.0f, 1.0f, 0.0f, 0.0f);  // Down / OFF
+        glRotatef(30.0f, 1.0f, 0.0f, 0.0f);
     }
     glTranslatef(0.0f, 0.15f, 0.0f);
     drawPrism(0.04f, 0.3f, 0.04f, texWood, hasWoodTex, 0.8f, 0.2f, 0.1f, 1.0f, 1.0f);
-    // Knob
     glTranslatef(0.0f, 0.15f, 0.0f);
     glDisable(GL_LIGHTING);
     glColor3f(1.0f, 0.1f, 0.1f);
@@ -328,8 +379,7 @@ void drawChamber3() {
     glPopMatrix();
     glPopMatrix();
 
-    // 4. Target Frame on Back Wall at (-2.66, 1.30, -5.18)
-    // Visible only in Dark Mode. Players must align the central hologram cube inside this frame.
+    // 4. Target Frame on Back Wall
     if (!roomLight) {
         glPushMatrix();
         glTranslatef(-2.66f, 1.30f, -5.18f);
@@ -338,38 +388,51 @@ void drawChamber3() {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
         if (ch3Solved) {
-            glColor4f(1.0f, 0.85f, 0.1f, 0.85f); // Glowing Gold on success
+            glColor4f(1.0f, 0.85f, 0.1f, 1.0f);
         } else {
-            glColor4f(0.0f, 0.9f, 0.6f, 0.65f); // Glowing Neon Cyan while active
+            glColor4f(0.0f, 1.0f, 0.4f, 0.9f);
         }
 
-        // Draw double square frame
+        glLineWidth(3.0f);
         glBegin(GL_LINE_LOOP);
-        glVertex3f(-0.35f, -0.35f, 0.0f);
-        glVertex3f( 0.35f, -0.35f, 0.0f);
-        glVertex3f( 0.35f,  0.35f, 0.0f);
-        glVertex3f(-0.35f,  0.35f, 0.0f);
+        glVertex3f(-0.6f, -0.6f, 0.0f);
+        glVertex3f( 0.6f, -0.6f, 0.0f);
+        glVertex3f( 0.6f,  0.6f, 0.0f);
+        glVertex3f(-0.6f,  0.6f, 0.0f);
         glEnd();
 
         glBegin(GL_LINE_LOOP);
-        glVertex3f(-0.38f, -0.38f, 0.0f);
-        glVertex3f( 0.38f, -0.38f, 0.0f);
-        glVertex3f( 0.38f,  0.38f, 0.0f);
-        glVertex3f(-0.38f,  0.38f, 0.0f);
+        glVertex3f(-0.65f, -0.65f, 0.0f);
+        glVertex3f( 0.65f, -0.65f, 0.0f);
+        glVertex3f( 0.65f,  0.65f, 0.0f);
+        glVertex3f(-0.65f,  0.65f, 0.0f);
         glEnd();
+
+        float c = 0.65f;
+        float t = 0.25f;
+        glBegin(GL_LINES);
+        glVertex3f(-c, -c, 0.0f); glVertex3f(-c+t, -c, 0.0f);
+        glVertex3f(-c, -c, 0.0f); glVertex3f(-c, -c+t, 0.0f);
+        glVertex3f( c, -c, 0.0f); glVertex3f( c-t, -c, 0.0f);
+        glVertex3f( c, -c, 0.0f); glVertex3f( c, -c+t, 0.0f);
+        glVertex3f(-c,  c, 0.0f); glVertex3f(-c+t,  c, 0.0f);
+        glVertex3f(-c,  c, 0.0f); glVertex3f(-c,  c-t, 0.0f);
+        glVertex3f( c,  c, 0.0f); glVertex3f( c-t,  c, 0.0f);
+        glVertex3f( c,  c, 0.0f); glVertex3f( c,  c-t, 0.0f);
+        glEnd();
+        glLineWidth(1.0f);
 
         glDisable(GL_BLEND);
         glEnable(GL_LIGHTING);
         glPopMatrix();
     }
 
-    // Solution Guide Beacon (toggled with 'U' key to show where the player should stand)
+    // Solution Guide Beacon
     if (showCh3SolutionGuide) {
         glDisable(GL_LIGHTING);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
-        // Draw vertical gold beam at target position
         glLineWidth(5.0f);
         glBegin(GL_LINES);
         glColor4f(1.0f, 0.8f, 0.1f, 0.4f);
@@ -384,7 +447,6 @@ void drawChamber3() {
         glVertex3f(targetCx, 5.0f, targetCz);
         glEnd();
 
-        // Glowing sphere beacon at target height
         glPushMatrix();
         glTranslatef(targetCx, targetCy, targetCz);
         glColor4f(1.0f, 0.85f, 0.1f, 0.85f);
@@ -395,7 +457,7 @@ void drawChamber3() {
         glEnable(GL_LIGHTING);
     }
 
-    // 5. The Golden Key (visible only when solved)
+    // 5. The Golden Key
     if (ch3Solved && !hasCh3Key) {
         static float keyRot = 0.0f;
         keyRot += 1.5f;
@@ -407,19 +469,15 @@ void drawChamber3() {
         glDisable(GL_LIGHTING);
         glColor3f(1.0f, 0.85f, 0.1f);
 
-        // Ring
         glPushMatrix(); glTranslatef(0.0f, 0.15f, 0.0f); glutSolidTorus(0.03f, 0.08f, 6, 8); glPopMatrix();
-        // Shaft
         glPushMatrix(); glTranslatef(0.0f, -0.05f, 0.0f); drawPrism(0.04f, 0.3f, 0.04f, 0, false, 1.0f, 0.85f, 0.1f, 1.0f, 1.0f); glPopMatrix();
-        // Teeth
         glPushMatrix(); glTranslatef(0.06f, -0.15f, 0.0f); drawPrism(0.08f, 0.06f, 0.03f, 0, false, 1.0f, 0.85f, 0.1f, 1.0f, 1.0f); glPopMatrix();
 
         glEnable(GL_LIGHTING);
         glPopMatrix();
     }
 
-    // 6. Exit Doors (Left = EYE [Trap], Right = MIRROR [Correct])
-    // Left Door (Eye)
+    // 6. Exit Doors
     glPushMatrix();
     glTranslatef(-1.2f, 1.05f, -5.2f);
     drawPrism(0.9f, 2.1f, 0.08f, texWood, hasWoodTex, 0.45f, 0.28f, 0.12f, 1.0f, 3.0f);
@@ -427,7 +485,6 @@ void drawChamber3() {
     drawDoorText("EYE");
     glPopMatrix();
 
-    // Right Door (Mirror)
     glPushMatrix();
     glTranslatef(1.2f, 1.05f, -5.2f);
     drawPrism(0.9f, 2.1f, 0.08f, texWood, hasWoodTex, 0.45f, 0.28f, 0.12f, 1.0f, 3.0f);
@@ -435,8 +492,7 @@ void drawChamber3() {
     drawDoorText("MIRROR");
     glPopMatrix();
 
-    // 1. Render the Dragon Hologram & Rising Sparks (DRAW LAST!)
-    // Must be rendered after opaque geometry to prevent Z-depth blending glitches.
+    // Dragon Hologram & Particles (draw last)
     drawDragonHologram();
     drawCh3Particles();
 }
@@ -444,7 +500,6 @@ void drawChamber3() {
 // --- Chamber 3 Lighting ---
 void setupChamber3Lighting() {
     if (roomLight) {
-        // Bright Mode
         glClearColor(0.2f, 0.2f, 0.22f, 1.0f);
         GLfloat fogC[4] = { 0.2f, 0.2f, 0.22f, 1.0f };
         glFogfv(GL_FOG_COLOR, fogC);
@@ -453,7 +508,6 @@ void setupChamber3Lighting() {
         GLfloat a[] = { 0.55f, 0.55f, 0.55f, 1.0f };
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, a);
     } else {
-        // Dark Hologram Mode
         glClearColor(0.01f, 0.01f, 0.03f, 1.0f);
         GLfloat fogC[4] = { 0.01f, 0.01f, 0.03f, 1.0f };
         glFogfv(GL_FOG_COLOR, fogC);
@@ -472,30 +526,24 @@ void setupChamber3Lighting() {
 void updateChamber3() {
     if (fadeAlpha > 0.0f) { fadeAlpha -= 0.04f; if (fadeAlpha < 0.0f) fadeAlpha = 0.0f; }
 
-    // Update hologram particle system
     updateCh3Particles();
 
-    // Pedestal lid animation
     if (ch3Solved && ch3PedestalOpenProgress < 1.0f) {
         ch3PedestalOpenProgress += 0.02f;
         if (ch3PedestalOpenProgress > 1.0f) ch3PedestalOpenProgress = 1.0f;
     }
 
-    // Movement & flying controls
     const float PLAYER_SPEED = 0.06f, TURN_SPEED = 1.8f;
 
-    if (keyStates['a'] || keyStates['A'] || specialKeyStates[GLUT_KEY_LEFT]) rotY += TURN_SPEED;
-    if (keyStates['d'] || keyStates['D'] || specialKeyStates[GLUT_KEY_RIGHT]) rotY -= TURN_SPEED;
+    if (keyStates['a'] || keyStates['A']) rotY += TURN_SPEED;
+    if (keyStates['d'] || keyStates['D']) rotY -= TURN_SPEED;
+    if (specialKeyStates[GLUT_KEY_LEFT])  rotY += TURN_SPEED;
+    if (specialKeyStates[GLUT_KEY_RIGHT]) rotY -= TURN_SPEED;
+    if (specialKeyStates[GLUT_KEY_PAGE_UP])   { rotX -= 1.5f; if (rotX < -89.0f) rotX = -89.0f; }
+    if (specialKeyStates[GLUT_KEY_PAGE_DOWN]) { rotX += 1.5f; if (rotX >  89.0f) rotX =  89.0f; }
 
-    // 1. Flight controls (used to fly up/down to align with the vertical height of target frame)
-    if (keyStates[' ']) { // Space to fly UP
-        camY += 0.05f;
-        if (camY > 4.5f) camY = 4.5f;
-    }
-    if (keyStates['c'] || keyStates['C']) { // C to fly DOWN
-        camY -= 0.05f;
-        if (camY < 0.5f) camY = 0.5f;
-    }
+    if (keyStates[' ']) { camY += 0.05f; if (camY > 4.5f) camY = 4.5f; }
+    if (keyStates['c'] || keyStates['C']) { camY -= 0.05f; if (camY < 0.5f) camY = 0.5f; }
 
     float moveX = 0, moveZ = 0;
     bool isMoving = false;
@@ -517,11 +565,8 @@ void updateChamber3() {
         float dist = sqrt(nX * nX + nZ * nZ);
         bool col = false;
         if (dist > 5.8f) col = true;
-        // Pedestal collision
         if (sqrt(nX*nX + nZ*nZ) < 0.8f) col = true;
-        // Lever collision
         if (sqrt((nX - (-2.0f))*(nX - (-2.0f)) + (nZ - 3.8f)*(nZ - 3.8f)) < 0.6f) col = true;
-
         if (!hasCh3Key && nZ < -4.8f && fabs(nX) < 1.8f) col = true;
 
         if (!col) {
@@ -540,29 +585,67 @@ void updateChamber3() {
         }
     }
 
-    // 2. Check perspective alignment condition
-    // Distance from camera coordinates (camX, camY, camZ) to target position (targetCx, targetCy, targetCz)
-    float posDiff = sqrt((camX - targetCx) * (camX - targetCx) +
-                         (camY - targetCy) * (camY - targetCy) +
-                         (camZ - targetCz) * (camZ - targetCz));
-    // Yaw rotation difference (normalized to 180 degrees max)
-    float diffRy = fmod(fabs(rotY - targetRy), 360.0f);
-    if (diffRy > 180.0f) diffRy = 360.0f - diffRy;
+    // === COLOR MATCHING PUZZLE UPDATE ===
+    if (!roomLight) {
+        holoColorTimer += 0.016f;
 
-    float diffRx = fabs(rotX - targetRx);
-    float rotDiff = sqrt(diffRx * diffRx + diffRy * diffRy);
+        // Flash timers
+        if (matchFlashTimer > 0.0f) matchFlashTimer -= 0.016f;
 
-    // Solve if position diff < 0.35, rotation diff < 6.0, zoom is at 45.0, AND room is in Dark Mode
-    if (!roomLight && posDiff < 0.35f && rotDiff < 6.0f && fabs(zoomFov - 45.0f) < 4.0f) {
-        ch3Solved = true;
+        // FIX: wrongTileFlash is NOT set here every frame.
+        // It is only set to true inside the wrong-tile branch below.
+        if (wrongFlashTimer > 0.0f) {
+            wrongFlashTimer -= 0.016f;
+        } else {
+            wrongTileFlash = false;
+        }
+
+        if (tileCooldown > 0.0f) {
+            tileCooldown -= 0.016f;
+        } else {
+            for (int i = 0; i < 4; i++) {
+                float dx = camX - tileX[i];
+                float dz = camZ - tileZ[i];
+                if (fabs(dx) < 0.7f && fabs(dz) < 0.7f) {
+                    if (i == holoColorIndex) {
+                        // Correct tile!
+                        wrongFlashTimer = 0.0f;
+                        wrongTileFlash = false;   // explicitly clear wrong flash
+                        colorMatched[i] = true;
+                        matchCount++;
+                        matchFlashTimer = 0.6f;
+                        tileCooldown = 1.2f;
+                        ch3RumbleTimer = 0.15f;
+                        if (matchCount >= 4) {
+                            ch3Solved = true;
+                        } else {
+                            holoColorIndex = (holoColorIndex + 1) % 4;
+                            holoColorTimer = 0.0f;  
+                        }
+                    } else {
+                        // Wrong tile
+                        wrongFlashTimer = 0.8f;
+                        wrongTileFlash = true;    // only set here
+                        tileCooldown = 0.8f;
+                        ch3RumbleTimer = 0.2f;
+
+                        //reset count
+                        // matchCount = 0;
+                        // holoColorIndex = 0;
+                        // holoColorTimer = 0.0f;
+                        // for (int i = 0; i < 4; i++) colorMatched[i] = false;
+
+                    }
+                    break;
+                }
+            }
+        }
     } else {
-        ch3Solved = false;
+        holoColorTimer = 0.0f;
     }
 
-    // 3. Exit doors verification
-    // Riddle: "A container for reflection..." -> Answer: MIRROR (Right Door)
+    // Exit doors
     if (hasCh3Key && camZ < -4.5f) {
-        // Left Door (EYE) [TRAP]
         float dxL = camX - (-1.2f);
         float dzL = camZ - (-5.2f);
         if (sqrt(dxL * dxL + dzL * dzL) < 0.6f) {
@@ -572,7 +655,6 @@ void updateChamber3() {
             ch3RumbleTimer = 0.8f;
         }
 
-        // Right Door (MIRROR) [CORRECT] - Transition to Chamber 4 (Horror Stealth)
         float dxR = camX - 1.2f;
         float dzR = camZ - (-5.2f);
         if (sqrt(dxR * dxR + dzR * dzR) < 0.6f) {
@@ -599,37 +681,67 @@ void updateChamber3() {
 
 // --- Chamber 3 HUD ---
 void drawChamber3HUD() {
-    char msg[128];
+    char msg[256];
+    static const char* colorNames[4] = {"RED", "BLUE", "GREEN", "YELLOW"};
+    static const float hudR[4] = {1.0f, 0.2f, 0.1f, 1.0f};
+    static const float hudG[4] = {0.1f, 0.4f, 1.0f, 0.9f};
+    static const float hudB[4] = {0.1f, 1.0f, 0.2f, 0.1f};
+
+    // Title
     glColor3f(0.0f, 0.8f, 1.0f);
-    renderBitmapString(20.0f, WINDOW_HEIGHT - 35.0f, GLUT_BITMAP_HELVETICA_12, "CHAMBER 3: THE CHAMBER OF DRAGON ILLUSION");
-    
-    glColor3f(0.8f, 0.8f, 0.8f);
-    renderBitmapString(20.0f, WINDOW_HEIGHT - 55.0f, GLUT_BITMAP_HELVETICA_10, "Goal: Align the floating Dragon Hologram inside the glowing wall frame.");
-    
+    renderBitmapString(20.0f, WINDOW_HEIGHT - 35.0f, GLUT_BITMAP_HELVETICA_12, "CHAMBER 3: THE DRAGON COLOR RITUAL");
+
     if (roomLight) {
-        glColor3f(1.0f, 0.3f, 0.3f);
-        renderBitmapString(20.0f, WINDOW_HEIGHT - 75.0f, GLUT_BITMAP_HELVETICA_10, "Room Light is ON. Hologram is faded. Interact with the switch lever near the entrance (or press [L]) to darken the room!");
+        glColor3f(1.0f, 0.2f, 0.2f);
+        renderBitmapString(20.0f, WINDOW_HEIGHT - 60.0f, GLUT_BITMAP_HELVETICA_12, ">> Turn OFF the room light first! Press [L]");
+        glColor3f(0.7f, 0.7f, 0.7f);
+        renderBitmapString(20.0f, WINDOW_HEIGHT - 78.0f, GLUT_BITMAP_HELVETICA_10, "The Dragon Ritual only works in darkness.");
     } else {
-        glColor3f(0.3f, 1.0f, 0.6f);
-        renderBitmapString(20.0f, WINDOW_HEIGHT - 75.0f, GLUT_BITMAP_HELVETICA_10, "Dark Mode Active! Align the Hologram inside the target frame on the back wall.");
+        glColor3f(0.85f, 0.85f, 0.85f);
+        renderBitmapString(20.0f, WINDOW_HEIGHT - 55.0f, GLUT_BITMAP_HELVETICA_10, "Dragon glows a color. Step on that tile.");
+
+        // FIX: Show instruction text in hologram's current color, but do NOT reveal color name
+        // glColor3f(hudR[holoColorIndex], hudG[holoColorIndex], hudB[holoColorIndex]);
+        glColor3f(1, 1, 1); //white
+        renderBitmapString(20.0f, WINDOW_HEIGHT - 75.0f, GLUT_BITMAP_HELVETICA_12,
+            ">> Follow the hologram's color and step on that tile!");
+
+        // Tile positions reminder
+        // glColor3f(0.65f, 0.65f, 0.65f);
+        // renderBitmapString(20.0f, WINDOW_HEIGHT - 92.0f, GLUT_BITMAP_HELVETICA_10, "");
+
+        // Progress
+        sprintf(msg, "Progress: %d / 4", matchCount);
+        glColor3f(1.0f, 0.85f, 0.1f);
+        renderBitmapString(20.0f, WINDOW_HEIGHT - 110.0f, GLUT_BITMAP_HELVETICA_12, msg);
+
+        // Individual color checkboxes
+        // for (int i = 0; i < 4; i++) {
+        //     if (colorMatched[i]) glColor3f(0.2f, 1.0f, 0.3f);
+        //     else if (i == holoColorIndex) glColor3f(hudR[i], hudG[i], hudB[i]);
+        //     else glColor3f(0.4f, 0.4f, 0.4f);
+        //     sprintf(msg, "[%s: %s]", colorNames[i], colorMatched[i] ? "DONE" : (i == holoColorIndex ? "NOW!" : "..."));
+        //     renderBitmapString(20.0f + i * 165.0f, WINDOW_HEIGHT - 128.0f, GLUT_BITMAP_HELVETICA_10, msg);
+        // }
     }
-    
-    // Guide toggle details
-    sprintf(msg, "Press [U] to Toggle Solution Beacon: %s", showCh3SolutionGuide ? "ACTIVE" : "INACTIVE");
-    glColor3f(1.0f, 0.85f, 0.1f);
-    renderBitmapString(20.0f, WINDOW_HEIGHT - 90.0f, GLUT_BITMAP_HELVETICA_10, msg);
 
-    // Display current values for developer/tester
-    sprintf(msg, "Camera: Pos(%.2f, %.2f, %.2f) | Rot(Pitch: %.1f, Yaw: %.1f) | Zoom FOV: %.1f", camX, camY, camZ, rotX, rotY, zoomFov);
-    renderBitmapString(20.0f, WINDOW_HEIGHT - 105.0f, GLUT_BITMAP_HELVETICA_10, msg);
+    // // Wrong tile flash
+    // if (wrongTileFlash) {
+    //     glColor3f(1.0f, 0.05f, 0.05f);
+    //     renderBitmapString(WINDOW_WIDTH / 2.0f - 120.0f, WINDOW_HEIGHT / 2.0f + 60.0f, GLUT_BITMAP_HELVETICA_18, "");
+    // }
 
-    sprintf(msg, "Target: Pos(%.2f, %.2f, %.2f) | Rot(Pitch: %.1f, Yaw: %.1f) | Zoom FOV: 45.0", targetCx, targetCy, targetCz, targetRx, targetRy);
-    renderBitmapString(20.0f, WINDOW_HEIGHT - 125.0f, GLUT_BITMAP_HELVETICA_10, msg);
+    // Correct match flash
+    if (matchFlashTimer > 0.0f && !ch3Solved) {
+        glColor3f(0.2f, 1.0f, 0.4f);
+        renderBitmapString(WINDOW_WIDTH / 2.0f - 60.0f, WINDOW_HEIGHT / 2.0f + 60.0f, GLUT_BITMAP_HELVETICA_18, "CORRECT!");
+    }
 
+    // Solved message
     if (ch3Solved) {
         glColor3f(1.0f, 0.85f, 0.1f);
-        renderBitmapString(WINDOW_WIDTH / 2.0f - 180.0f, WINDOW_HEIGHT / 2.0f + 120.0f, GLUT_BITMAP_HELVETICA_18, "PERSPECTIVE ALIGNED!");
-        renderBitmapString(WINDOW_WIDTH / 2.0f - 160.0f, WINDOW_HEIGHT / 2.0f + 95.0f, GLUT_BITMAP_HELVETICA_12, "Proceed through the Right Door to Chamber 4.");
+        renderBitmapString(WINDOW_WIDTH / 2.0f - 200.0f, WINDOW_HEIGHT / 2.0f + 120.0f, GLUT_BITMAP_HELVETICA_18, "RITUAL COMPLETE! KEY UNLOCKED!");
+        renderBitmapString(WINDOW_WIDTH / 2.0f - 210.0f, WINDOW_HEIGHT / 2.0f + 95.0f,  GLUT_BITMAP_HELVETICA_12, "Go to the center pedestal to collect the key, then use the RIGHT door (MIRROR).");
     }
 }
 
@@ -646,12 +758,20 @@ void resetChamber3() {
     ch3RumbleTimer = 0.0f;
     showCh3SolutionGuide = false;
 
+    holoColorTimer = 0.0f;
+    holoColorIndex = 0;
+    matchCount = 0;
+    matchFlashTimer = 0.0f;
+    wrongFlashTimer = 0.0f;
+    wrongTileFlash = false;
+    tileCooldown = 0.0f;
+    for (int i = 0; i < 4; i++) colorMatched[i] = false;
+
     initCh3ParticleSystem();
 }
 
 // --- Interaction ---
 void handleChamber3Interaction() {
-    // Check leverage switch interaction
     float dx = camX - (-2.0f);
     float dz = camZ - 3.8f;
     if (sqrt(dx * dx + dz * dz) < 1.0f) {

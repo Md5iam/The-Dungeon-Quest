@@ -940,6 +940,7 @@ void keyboard(unsigned char key, int x, int y) {
                 camX = 0.0f; camY = 1.0f; camZ = 4.8f;
                 rotX = 10.0f; rotY = 0.0f;
                 fadeAlpha = 1.0f;
+                resetChamber4();
                 std::cout << "Admin Skip: Chamber 3 -> Chamber 4" << std::endl;
             } else if (currentGameState == STATE_CHAMBER_4) {
                 currentGameState = STATE_OUTSIDE_SCENARIO;
