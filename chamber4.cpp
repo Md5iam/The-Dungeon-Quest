@@ -127,7 +127,7 @@ static void drawGhostParticles() {
     glEnable(GL_LIGHTING);
 }
 
-// --- Collision Helper ---
+// --- Collision Helper ---(preventing the player from walking through solid objects)
 static bool checkCh4Collision(float x, float z) {
     // Octagon boundary
     if (sqrt(x*x + z*z) > 5.8f) return true;

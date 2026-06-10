@@ -40,9 +40,9 @@ void drawOutsideScenarioHUD() {
     glEnd();
     glDisable(GL_BLEND);
 
-    // 2. The main warning message in bright red
+    // 2. The main warning message in bright red (using Times Roman 24 for maximum size)
     glColor3f(1.0f, 0.2f, 0.2f);
-    renderBitmapString(WINDOW_WIDTH / 2.0f - 240.0f, WINDOW_HEIGHT / 2.0f + 20.0f, GLUT_BITMAP_HELVETICA_18, "AI is replacing software engineers, go back to the dungeon!!!");
+    renderBitmapString(WINDOW_WIDTH / 2.0f - 340.0f, WINDOW_HEIGHT / 2.0f + 20.0f, GLUT_BITMAP_TIMES_ROMAN_24, "AI is replacing software engineers, go back to the dungeon!!!");
 
     // 3. Return prompt in gray (resets the entire quest from Chamber 1)
     glColor3f(0.6f, 0.6f, 0.6f);
